@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block content %}
+<form method="post" class="card"><h2>Add a word</h2>{% csrf_token %}
+{% for f in form %}<label>{{ f.label }}{{ f }}</label>{{ f.errors }}{% endfor %}
+<button class="btn">Save word</button></form>{% endblock %}

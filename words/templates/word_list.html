@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block content %}
+{% for w in words %}<div class="card"><b>{{ w.term }}</b> – {{ w.translation }}
+{% if w.meaning %}<div class="mut">{{ w.meaning }}</div>{% endif %}{% if w.example %}<div><i>{{ w.example }}</i></div>{% endif %}
+<div class="mut">Next review: {{ w.next_review }} · Stage {{ w.stage }}/5 · Missed {{ w.fails }}×</div>
+<form method="post" action="{% url 'delete_word' w.pk %}">{% csrf_token %}<button class="btn alt">Delete</button></form></div>
+{% empty %}<p class="card">No words yet. <a href="{% url 'add_word' %}">Add your first word</a>.</p>{% endfor %}{% endblock %}

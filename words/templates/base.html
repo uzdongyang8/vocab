@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}WordBox{% endblock %}</title>
+<style>
+:root{--bg:#eef2f7;--ink:#14213d;--mut:#5b6b85;--acc:#2a6f97;--ok:#2e7d32;--bad:#b3261e;--card:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 system-ui,sans-serif}
+nav{display:flex;gap:1rem;flex-wrap:wrap;align-items:center;padding:.8rem 1.2rem;background:var(--ink)}
+nav a,nav button{color:#fff;text-decoration:none;background:none;border:0;font:inherit;cursor:pointer}nav .brand{font-weight:700;margin-right:auto}
+main{max-width:640px;margin:1.5rem auto;padding:0 1rem}
+.card{background:var(--card);border-radius:10px;padding:1.2rem;margin-bottom:1rem;border:1px solid #d5dde8}
+.stats{display:flex;gap:1rem}.stats div{flex:1}.stats b{display:block;font-size:2rem}
+input,textarea,select{width:100%;padding:.6rem;border:1px solid #b9c4d4;border-radius:6px;font:inherit;margin:.2rem 0 .8rem}
+.btn{display:inline-block;background:var(--acc);color:#fff;border:0;border-radius:6px;padding:.65rem 1.1rem;font:inherit;cursor:pointer;text-decoration:none}
+.btn.alt{background:#fff;color:var(--ink);border:1px solid #b9c4d4}.opts{display:grid;gap:.6rem}.opts .btn{text-align:left}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.mut{color:var(--mut)}.errorlist{color:var(--bad);padding:0;list-style:none;margin:0}
+.big{font-size:1.9rem;font-weight:700;margin:.3rem 0 1rem}code{background:#e2e9f2;padding:.1rem .4rem;border-radius:4px}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+</style></head><body>
+<nav><a class="brand" href="{% url 'dashboard' %}">WordBox</a>
+{% if user.is_authenticated %}<a href="{% url 'add_word' %}">Add word</a><a href="{% url 'word_list' %}">My words</a><a href="{% url 'quiz_start' %}">Quiz</a>
+<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button>Log out</button></form>
+{% else %}<a href="{% url 'login' %}">Log in</a><a href="{% url 'register' %}">Sign up</a>{% endif %}</nav>
+<main>{% for m in messages %}<p class="card {{ m.tags }}">{{ m }}</p>{% endfor %}{% block content %}{% endblock %}</main>
+</body></html>

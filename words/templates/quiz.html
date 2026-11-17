@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block content %}
+{% if fb %}<p class="card {% if fb.ok %}ok{% else %}bad{% endif %}">{% if fb.ok %}Correct!{% else %}Right answer: <b>{{ fb.answer }}</b>{% endif %}</p>{% endif %}
+<form method="post" class="card"><div class="mut">Question {{ n }} of {{ total }}</div>{% csrf_token %}
+<div class="big">{{ prompt }}</div>
+{% if q.kind == "choice" %}<div class="mut">Pick the translation</div><div class="opts">
+{% for o in q.options %}<button class="btn alt" name="answer" value="{{ o }}">{{ o }}</button>{% endfor %}</div>
+{% else %}<label>Type the word in the language you learn<input name="answer" autofocus autocomplete="off"></label><button class="btn">Check</button>{% endif %}
+{% if word.example and q.kind == "choice" %}<p class="mut"><i>{{ word.example }}</i></p>{% endif %}</form>{% endblock %}
