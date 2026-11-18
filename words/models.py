@@ -48,3 +48,9 @@ class Word(models.Model):
 
     def __str__(self):
         return f"{self.term} = {self.translation}"
+
+
+class BotState(models.Model):
+    """Running Telegram quiz for a chat (kept in the DB so any web worker can continue it)."""
+    chat_id = models.BigIntegerField(unique=True)
+    data = models.JSONField(default=dict)

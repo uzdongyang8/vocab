@@ -1,12 +1,18 @@
+import json
+import logging
+
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from . import services
+from . import bot, services
 from .forms import WordForm
 from .models import Profile, Word
 
@@ -95,3 +101,16 @@ def quiz(request):
         "q": q, "prompt": services.prompt_of(word, q["kind"]), "word": word,
         "n": st["i"] + 1, "total": len(st["ids"]), "fb": fb,
     })
+
+
+@csrf_exempt
+@require_POST
+def telegram_webhook(request):
+    secret = settings.TELEGRAM_WEBHOOK_SECRET
+    if not secret or request.headers.get("X-Telegram-Bot-Api-Secret-Token") != secret:
+        return HttpResponseForbidden()
+    try:
+        bot.handle_update(json.loads(request.body))
+    except Exception:  # always answer 200 so Telegram does not resend the same update
+        logging.getLogger(__name__).exception("telegram update failed")
+    return HttpResponse("ok")

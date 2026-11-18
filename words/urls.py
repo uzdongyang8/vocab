@@ -10,4 +10,5 @@ urlpatterns = [
     path("words/<int:pk>/delete/", views.delete_word, name="delete_word"),
     path("quiz/", views.quiz_start, name="quiz_start"),
     path("quiz/play/", views.quiz, name="quiz"),
+    path("telegram/webhook/", views.telegram_webhook),
 ]
