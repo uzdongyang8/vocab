@@ -1,5 +1,6 @@
 {% extends "base.html" %}{% block content %}
 <div class="card stats"><div><b>{{ due }}</b>due today</div><div><b>{{ total }}</b>words</div><div><b>{{ mastered }}</b>mastered</div></div>
+<p class="mut"><a href="{% url 'word_list' %}?show=archived">{{ archived }} archived</a> (not used in quizzes)</p>
 <p><a class="btn" href="{% url 'quiz_start' %}">Start quiz</a> <a class="btn alt" href="{% url 'add_word' %}">Add word</a></p>
 <div class="card"><h3>Telegram bot</h3>
 {% if profile.telegram_id %}<p class="ok">Connected. You will get a daily reminder when words are due.</p>

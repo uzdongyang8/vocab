@@ -1,4 +1,5 @@
 {% extends "base.html" %}{% block content %}
-<form method="post" class="card"><h2>Add a word</h2>{% csrf_token %}
+<form method="post" class="card"><h2>{% if editing %}Edit word{% else %}Add a word{% endif %}</h2>{% csrf_token %}
 {% for f in form %}<label>{{ f.label }}{{ f }}</label>{{ f.errors }}{% endfor %}
-<button class="btn">Save word</button></form>{% endblock %}
+<button class="btn">{% if editing %}Save changes{% else %}Save word{% endif %}</button>
+{% if editing %}<a class="btn alt" href="{% url 'word_list' %}">Cancel</a>{% endif %}</form>{% endblock %}

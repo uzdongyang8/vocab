@@ -7,6 +7,7 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.http import HttpResponse, HttpResponseForbidden
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -27,8 +28,9 @@ def register(request):
 
 @login_required
 def dashboard(request):
-    qs = Word.objects.filter(user=request.user)
+    qs = Word.objects.filter(user=request.user, archived=False)
     return render(request, "dashboard.html", {
+        "archived": Word.objects.filter(user=request.user, archived=True).count(),
         "total": qs.count(),
         "due": qs.filter(next_review__lte=timezone.localdate()).count(),
         "mastered": qs.filter(stage__gte=5).count(),
@@ -52,15 +54,57 @@ def add_word(request):
 
 
 @login_required
+def edit_word(request, pk):
+    word = get_object_or_404(Word, pk=pk, user=request.user)
+    form = WordForm(request.POST or None, instance=word)
+    if form.is_valid():
+        if Word.objects.filter(user=request.user, term__iexact=form.cleaned_data["term"]).exclude(pk=pk).exists():
+            form.add_error("term", "You already have this word.")
+        else:
+            form.save()  # learning progress (stage, next review) is kept
+            messages.success(request, f"Saved “{word.term}”.")
+            return redirect("word_list")
+    return render(request, "add_word.html", {"form": form, "editing": True})
+
+
+def _back(request):
+    nxt = request.POST.get("next", "")
+    if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
+        return redirect(nxt)
+    return redirect("word_list")
+
+
+@login_required
 def word_list(request):
-    return render(request, "word_list.html", {"words": Word.objects.filter(user=request.user)})
+    q = request.GET.get("q", "").strip()
+    show = "archived" if request.GET.get("show") == "archived" else "active"
+    mine = Word.objects.filter(user=request.user)
+    active = mine.filter(archived=False)
+    if q:  # search looks through active and archived words
+        words = services.search_words(request.user, q)
+    else:
+        words = list(mine.filter(archived=True) if show == "archived" else active)
+    return render(request, "word_list.html", {
+        "words": words, "q": q, "show": show, "total": mine.count(), "active": active.count(),
+        "due": active.filter(next_review__lte=timezone.localdate()).count(),
+        "archived": mine.filter(archived=True).count()})
 
 
 @login_required
 @require_POST
 def delete_word(request, pk):
     get_object_or_404(Word, pk=pk, user=request.user).delete()
-    return redirect("word_list")
+    return _back(request)
+
+
+@login_required
+@require_POST
+def set_archived(request, pk, value):
+    word = get_object_or_404(Word, pk=pk, user=request.user)
+    word.archived = value
+    word.save(update_fields=["archived"])
+    messages.success(request, f"{'Archived' if value else 'Restored'} “{word.term}”.")
+    return _back(request)
 
 
 @login_required
@@ -73,7 +117,7 @@ def quiz_start(request):
             return redirect("add_word")
         request.session["quiz"] = {"ids": ids, "i": 0, "score": 0, "q": None, "fb": None}
         return redirect("quiz")
-    return render(request, "quiz_start.html", {"count": Word.objects.filter(user=request.user).count()})
+    return render(request, "quiz_start.html", {"count": Word.objects.filter(user=request.user, archived=False).count()})
 
 
 @login_required

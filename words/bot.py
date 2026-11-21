@@ -1,3 +1,5 @@
+from django.utils import timezone
+
 from words import services
 from words import telegram as tg
 from words.models import BotState, Profile, Word
@@ -6,9 +8,16 @@ HELP = (
     "Commands:\n"
     "/link CODE – connect this chat to your website account (code is on the dashboard)\n"
     "/add word | translation | meaning | example – add a word (meaning and example optional)\n"
+    "/edit word | translation | meaning | example – change a word (empty = keep, - = clear meaning/example)\n"
     "/words – show your latest words\n"
+    "/archive word – hide a word from quizzes; /unarchive word – bring it back\n"
+    "/search text – find words (in word, translation, meaning or example)\n"
     "/quiz 20 or /quiz 30 – start a quiz"
 )
+
+
+def label(w):
+    return ("🗄 " if w.archived else "") + f"{w.term} – {w.translation}"
 
 
 def save(chat, st):
@@ -17,7 +26,7 @@ def save(chat, st):
 
 def ask(chat, user, st):
     while st["i"] < len(st["ids"]):
-        word = Word.objects.filter(pk=st["ids"][st["i"]], user=user).first()
+        word = Word.objects.filter(pk=st["ids"][st["i"]], user=user, archived=False).first()
         if word:
             break
         st["i"] += 1  # word was deleted meanwhile
@@ -69,9 +78,46 @@ def handle_message(chat, text):
         _, created = Word.objects.get_or_create(user=user, term=parts[0], defaults={
             "translation": parts[1], "meaning": parts[2], "example": parts[3]})
         return tg.send(chat, f"Added “{parts[0]}” ✅" if created else "You already have this word.")
+    if cmd == "/edit":
+        parts = [p.strip() for p in arg.split("|")] + ["", "", ""]
+        word = Word.objects.filter(user=user, term__iexact=parts[0]).first() if parts[0] else None
+        if not word:
+            return tg.send(chat, "Format: /edit word | translation | meaning | example\n"
+                                 "Word must already exist. Empty part = keep, - = clear meaning/example.")
+        for field, val in zip(("translation", "meaning", "example"), parts[1:4]):
+            if not val:
+                continue
+            if val == "-":
+                if field == "translation":
+                    continue
+                val = ""
+            setattr(word, field, val)
+        word.save()
+        return tg.send(chat, f"Updated “{word.term}” ✅")
+    if cmd in ("/archive", "/unarchive"):
+        word = Word.objects.filter(user=user, term__iexact=arg.strip()).first() if arg.strip() else None
+        if not word:
+            return tg.send(chat, f"Format: {cmd} word (the word must already exist)")
+        word.archived = cmd == "/archive"
+        word.save(update_fields=["archived"])
+        return tg.send(chat, f"{'Archived' if word.archived else 'Restored'} “{word.term}” ✅")
+    if cmd == "/search":
+        if not arg.strip():
+            return tg.send(chat, "Format: /search text")
+        found = services.search_words(user, arg)
+        if not found:
+            return tg.send(chat, f"No words match “{arg.strip()}”.")
+        more = f"\n… and {len(found) - 20} more" if len(found) > 20 else ""
+        return tg.send(chat, f"🔎 {len(found)} found\n\n" + "\n".join(label(w) for w in found[:20]) + more)
     if cmd == "/words":
-        words = Word.objects.filter(user=user)[:20]
-        return tg.send(chat, "\n".join(f"{w.term} – {w.translation}" for w in words) or "No words yet. Use /add.")
+        active = Word.objects.filter(user=user, archived=False)
+        total, archived = active.count(), Word.objects.filter(user=user, archived=True).count()
+        if not total and not archived:
+            return tg.send(chat, "No words yet. Use /add.")
+        due = active.filter(next_review__lte=timezone.localdate()).count()
+        head = f"📚 {total} words ({due} due today" + (f", {archived} archived)" if archived else ")")
+        more = f"\n… and {total - 20} more" if total > 20 else ""
+        return tg.send(chat, head + "\n\n" + "\n".join(label(w) for w in active[:20]) + more)
     if cmd == "/quiz":
         ids = services.build_quiz(user, 30 if arg.strip() == "30" else 20)
         if not ids:

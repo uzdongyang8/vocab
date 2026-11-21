@@ -30,6 +30,7 @@ class Word(models.Model):
     stage = models.PositiveSmallIntegerField(default=0)
     next_review = models.DateField(default=timezone.localdate)
     fails = models.PositiveIntegerField(default=0)
+    archived = models.BooleanField(default=False)  # archived words are left out of quizzes and reminders
     created = models.DateTimeField(auto_now_add=True)
 
     class Meta:
