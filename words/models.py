@@ -24,6 +24,7 @@ class Profile(models.Model):
 class Word(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     term = models.CharField(max_length=200)          # word in the language you learn
+    pronunciation = models.CharField(max_length=200, blank=True)
     translation = models.CharField(max_length=200)
     meaning = models.TextField(blank=True)
     example = models.TextField(blank=True)

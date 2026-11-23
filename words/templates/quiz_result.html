@@ -1,4 +1,4 @@
 {% extends "base.html" %}{% block content %}
-{% if fb %}<p class="card {% if fb.ok %}ok{% else %}bad{% endif %}">{% if fb.ok %}Correct!{% else %}Right answer: <b>{{ fb.answer }}</b>{% endif %}</p>{% endif %}
+{% if fb %}<p class="card {% if fb.ok %}ok{% else %}bad{% endif %}">{% if fb.ok %}Correct!{% else %}Right answer: <b>{{ fb.answer }}</b>{% if fb.pron %} [{{ fb.pron }}]{% endif %}{% endif %}</p>{% endif %}
 <div class="card"><h2>Score: {{ score }} / {{ total }}</h2><p class="mut">Missed words come back in your next quiz.</p>
 <a class="btn" href="{% url 'quiz_start' %}">Another quiz</a></div>{% endblock %}

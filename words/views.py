@@ -136,7 +136,8 @@ def quiz(request):
         ok = services.is_correct(word, q["kind"], request.POST.get("answer", ""))
         word.review(ok)
         st.update(score=st["score"] + ok, i=st["i"] + 1, q=None,
-                  fb={"ok": ok, "answer": services.answer_of(word, q["kind"])})
+                  fb={"ok": ok, "answer": services.answer_of(word, q["kind"]),
+                      "pron": word.pronunciation if q["kind"] != "choice" else ""})
         request.session["quiz"] = st
         return redirect("quiz")
     fb, st["fb"] = st["fb"], None

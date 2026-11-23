@@ -7,8 +7,8 @@ from words.models import BotState, Profile, Word
 HELP = (
     "Commands:\n"
     "/link CODE – connect this chat to your website account (code is on the dashboard)\n"
-    "/add word | translation | meaning | example – add a word (meaning and example optional)\n"
-    "/edit word | translation | meaning | example – change a word (empty = keep, - = clear meaning/example)\n"
+    "/add word | translation | meaning | example | pronunciation – add a word (everything after the translation is optional)\n"
+    "/edit word | translation | meaning | example | pronunciation – change a word (empty = keep, - = clear)\n"
     "/words – show your latest words\n"
     "/archive word – hide a word from quizzes; /unarchive word – bring it back\n"
     "/search text – find words (in word, translation, meaning or example)\n"
@@ -17,7 +17,8 @@ HELP = (
 
 
 def label(w):
-    return ("🗄 " if w.archived else "") + f"{w.term} – {w.translation}"
+    pron = f" [{w.pronunciation}]" if w.pronunciation else ""
+    return ("🗄 " if w.archived else "") + f"{w.term}{pron} – {w.translation}"
 
 
 def save(chat, st):
@@ -39,7 +40,10 @@ def ask(chat, user, st):
     if st["q"]["kind"] == "choice":
         kb = {"inline_keyboard": [[{"text": o, "callback_data": f"a:{st['i']}:{k}"}]
                                   for k, o in enumerate(st["q"]["options"])]}
-        tg.send(chat, text + "\n\nPick the translation:", kb)
+        pron = f" [{word.pronunciation}]" if word.pronunciation else ""
+        tg.send(chat, text + pron + "\n\nPick the translation:", kb)
+    elif st["q"]["kind"] == "meaning":
+        tg.send(chat, text + "\n\n✍️ Which word has this meaning? Type it:")
     else:
         tg.send(chat, text + "\n\n✍️ Type the word in the language you learn:")
 
@@ -50,7 +54,8 @@ def answer(chat, user, st, given):
     word.review(ok)
     st["score"] += ok
     st["i"] += 1
-    tg.send(chat, "✅ Correct!" if ok else f"❌ Right answer: {services.answer_of(word, kind)}")
+    pron = f" [{word.pronunciation}]" if word.pronunciation and kind != "choice" else ""
+    tg.send(chat, "✅ Correct!" if ok else f"❌ Right answer: {services.answer_of(word, kind)}{pron}")
     ask(chat, user, st)
 
 
@@ -72,19 +77,19 @@ def handle_message(chat, text):
     if cmd in ("/start", "/help"):
         return tg.send(chat, HELP)
     if cmd == "/add":
-        parts = [p.strip() for p in arg.split("|")] + ["", ""]
+        parts = [p.strip() for p in arg.split("|")] + [""] * 4
         if not parts[0] or not parts[1]:
-            return tg.send(chat, "Format: /add word | translation | meaning | example")
+            return tg.send(chat, "Format: /add word | translation | meaning | example | pronunciation")
         _, created = Word.objects.get_or_create(user=user, term=parts[0], defaults={
-            "translation": parts[1], "meaning": parts[2], "example": parts[3]})
+            "translation": parts[1], "meaning": parts[2], "example": parts[3], "pronunciation": parts[4]})
         return tg.send(chat, f"Added “{parts[0]}” ✅" if created else "You already have this word.")
     if cmd == "/edit":
-        parts = [p.strip() for p in arg.split("|")] + ["", "", ""]
+        parts = [p.strip() for p in arg.split("|")] + [""] * 5
         word = Word.objects.filter(user=user, term__iexact=parts[0]).first() if parts[0] else None
         if not word:
-            return tg.send(chat, "Format: /edit word | translation | meaning | example\n"
-                                 "Word must already exist. Empty part = keep, - = clear meaning/example.")
-        for field, val in zip(("translation", "meaning", "example"), parts[1:4]):
+            return tg.send(chat, "Format: /edit word | translation | meaning | example | pronunciation\n"
+                                 "Word must already exist. Empty part = keep, - = clear (not the translation).")
+        for field, val in zip(("translation", "meaning", "example", "pronunciation"), parts[1:5]):
             if not val:
                 continue
             if val == "-":
@@ -124,7 +129,7 @@ def handle_message(chat, text):
             return tg.send(chat, "Add some words first with /add.")
         return ask(chat, user, {"ids": ids, "i": 0, "score": 0, "q": None, "word": None})
     state = BotState.objects.filter(chat_id=chat).first()
-    if state and state.data["q"]["kind"] == "type" and not text.startswith("/"):
+    if state and state.data["q"]["kind"] != "choice" and not text.startswith("/"):
         return answer(chat, user, state.data, text)
     tg.send(chat, HELP)
 
