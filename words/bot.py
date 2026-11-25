@@ -11,6 +11,8 @@ HELP = (
     "/edit word | translation | meaning | example | pronunciation – change a word (empty = keep, - = clear)\n"
     "/words – show your latest words\n"
     "/archive word – hide a word from quizzes; /unarchive word – bring it back\n"
+    "/opposite word | other – link opposites; /similar word | other | more – link similar words; /unlink word | other\n"
+    "/show word – full details of a word, with its linked words\n"
     "/search text – find words (in word, translation, meaning or example)\n"
     "/quiz 20 or /quiz 30 – start a quiz"
 )
@@ -50,7 +52,12 @@ def ask(chat, user, st):
 
 def answer(chat, user, st, given):
     word, kind = Word.objects.get(pk=st["word"], user=user), st["q"]["kind"]
-    ok = services.is_correct(word, kind, given)
+    result = services.check_answer(word, kind, given)
+    if result == "synonym" and not st["q"].get("retried"):
+        st["q"]["retried"] = True
+        save(chat, st)
+        return tg.send(chat, f"🟡 “{given.strip()}” is a similar word, but not the one I'm looking for. Try again!")
+    ok = result == "correct"
     word.review(ok)
     st["score"] += ok
     st["i"] += 1
@@ -85,7 +92,7 @@ def handle_message(chat, text):
         return tg.send(chat, f"Added “{parts[0]}” ✅" if created else "You already have this word.")
     if cmd == "/edit":
         parts = [p.strip() for p in arg.split("|")] + [""] * 5
-        word = Word.objects.filter(user=user, term__iexact=parts[0]).first() if parts[0] else None
+        word = services.find_word(user, parts[0])
         if not word:
             return tg.send(chat, "Format: /edit word | translation | meaning | example | pronunciation\n"
                                  "Word must already exist. Empty part = keep, - = clear (not the translation).")
@@ -99,8 +106,48 @@ def handle_message(chat, text):
             setattr(word, field, val)
         word.save()
         return tg.send(chat, f"Updated “{word.term}” ✅")
+    if cmd in ("/opposite", "/similar", "/unlink"):
+        names = [p.strip() for p in arg.split("|") if p.strip()]
+        if len(names) < 2:
+            return tg.send(chat, f"Format: {cmd} word | other word" + (" | more" if cmd != "/opposite" else ""))
+        first = services.find_word(user, names[0])
+        others = [(n, services.find_word(user, n)) for n in names[1:]]
+        missing = [n for n, w in [(names[0], first)] + others if w is None]
+        if missing:
+            return tg.send(chat, "Not found (add them first): " + ", ".join(missing))
+        done = []
+        for n, other in others:
+            if other == first:
+                continue
+            if cmd == "/unlink":
+                first.opposites.remove(other)
+                first.similar.remove(other)
+            elif cmd == "/opposite":
+                first.similar.remove(other)
+                first.opposites.add(other)
+            else:
+                first.opposites.remove(other)
+                first.similar.add(other)
+            done.append(other.term)
+        sign = {"/opposite": "↔ opposite of", "/similar": "≈ similar to", "/unlink": "unlinked from"}[cmd]
+        return tg.send(chat, f"🔗 {first.term} {sign} {', '.join(done)} ✅" if done else "A word can't be linked to itself.")
+    if cmd == "/show":
+        w = services.find_word(user, arg)
+        if not w:
+            return tg.send(chat, "Format: /show word (the word must already exist)")
+        rows = [label(w)]
+        if w.meaning:
+            rows.append(f"📖 {w.meaning}")
+        if w.example:
+            rows.append(f"💬 {w.example}")
+        if w.opposites.exists():
+            rows.append("↔ Opposite: " + ", ".join(o.term for o in w.opposites.all()))
+        if w.similar.exists():
+            rows.append("≈ Similar: " + ", ".join(o.term for o in w.similar.all()))
+        rows.append(f"Added {timezone.localtime(w.created):%d %b %Y} · next review {w.next_review} · stage {w.stage}/5")
+        return tg.send(chat, "\n".join(rows))
     if cmd in ("/archive", "/unarchive"):
-        word = Word.objects.filter(user=user, term__iexact=arg.strip()).first() if arg.strip() else None
+        word = services.find_word(user, arg)
         if not word:
             return tg.send(chat, f"Format: {cmd} word (the word must already exist)")
         word.archived = cmd == "/archive"

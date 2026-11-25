@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% block content %}
-{% if fb %}<p class="card {% if fb.ok %}ok{% else %}bad{% endif %}">{% if fb.ok %}Correct!{% else %}Right answer: <b>{{ fb.answer }}</b>{% if fb.pron %} [{{ fb.pron }}]{% endif %}{% endif %}</p>{% endif %}
+{% if fb.hint %}<p class="card" role="status">🟡 {{ fb.hint }}</p>{% elif fb %}<p class="card {% if fb.ok %}ok{% else %}bad{% endif %}">{% if fb.ok %}Correct!{% else %}Right answer: <b>{{ fb.answer }}</b>{% if fb.pron %} [{{ fb.pron }}]{% endif %}{% endif %}</p>{% endif %}
 <form method="post" class="card"><div class="mut">Question {{ n }} of {{ total }}</div>{% csrf_token %}
 {% if q.kind == "meaning" %}<div class="mut">Meaning</div><div class="long">{{ prompt }}</div>
 {% else %}<div class="big">{{ prompt }}</div>{% endif %}

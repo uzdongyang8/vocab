@@ -1,5 +1,58 @@
 {% extends "base.html" %}{% block content %}
+<p id="q_note" class="ok" role="status"></p>
 <form method="post" class="card"><h2>{% if editing %}Edit word{% else %}Add a word{% endif %}</h2>{% csrf_token %}
-{% for f in form %}<label>{{ f.label }}{{ f }}</label>{{ f.errors }}{% endfor %}
+{% for f in form %}<label>{{ f.label }}{{ f }}</label>{% if f.help_text %}<div class="mut"><small>{{ f.help_text }}</small></div>{% endif %}{{ f.errors }}
+{% if f.name == "opposite_terms" or f.name == "similar_terms" %}<p><button type="button" class="btn alt quickadd" data-field="{{ f.name }}">+ Add a new word</button></p>{% endif %}{% endfor %}
 <button class="btn">{% if editing %}Save changes{% else %}Save word{% endif %}</button>
-{% if editing %}<a class="btn alt" href="{% url 'word_list' %}">Cancel</a>{% endif %}</form>{% endblock %}
+{% if editing %}<a class="btn alt" href="{% url 'word_list' %}">Cancel</a>{% endif %}</form>
+{{ form.missing|json_script:"missing" }}
+<dialog id="quick" aria-labelledby="q_title"><form id="quickform"><h3 id="q_title">Add a new word</h3>
+<label>Word<input id="q_term" autocomplete="off"></label>
+<label>Translation<input id="q_tr" autocomplete="off"></label>
+<p id="q_err" class="bad" role="alert"></p>
+<button class="btn">Save and use it</button> <button type="button" class="btn alt" id="q_cancel">Cancel</button></form></dialog>
+<script>
+(function () {
+  var dlg = document.getElementById("quick"), form = document.getElementById("quickform");
+  var term = document.getElementById("q_term"), tr = document.getElementById("q_tr");
+  var err = document.getElementById("q_err"), note = document.getElementById("q_note");
+  var missing = JSON.parse(document.getElementById("missing").textContent);
+  var field = null, prefilled = "";
+  var low = function (s) { return s.trim().toLowerCase(); };
+
+  document.querySelectorAll(".quickadd").forEach(function (b) {
+    b.addEventListener("click", function () {
+      field = b.dataset.field; prefilled = (missing[field] || [])[0] || "";
+      term.value = prefilled; tr.value = ""; err.textContent = "";
+      dlg.showModal(); (prefilled ? tr : term).focus();
+    });
+  });
+  document.getElementById("q_cancel").addEventListener("click", function () { dlg.close(); });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault(); err.textContent = "";
+    var main = document.getElementById("id_term");
+    if (main && low(main.value) && low(main.value) === low(term.value)) {
+      err.textContent = "A word can't be linked to itself."; return;
+    }
+    var body = new URLSearchParams({term: term.value, translation: tr.value});
+    fetch("{% url 'quick_add' %}", {
+      method: "POST", credentials: "same-origin", body: body,
+      headers: {"X-CSRFToken": document.querySelector("input[name=csrfmiddlewaretoken]").value}
+    }).then(function (r) { return r.json().then(function (d) { return {ok: r.ok, d: d}; }); })
+    .then(function (x) {
+      if (!x.ok || !x.d.ok) { err.textContent = x.d.error || "Could not save."; return; }
+      var input = document.getElementById("id_" + field), added = x.d.term;
+      var parts = input.value.split(",").map(function (p) { return p.trim(); }).filter(Boolean);
+      if (prefilled && low(prefilled) !== low(added)) {
+        parts = parts.filter(function (p) { return low(p) !== low(prefilled); });
+      }
+      if (!parts.some(function (p) { return low(p) === low(added); })) parts.push(added);
+      input.value = parts.join(", ");
+      note.textContent = (x.d.existed ? "“" + added + "” already exists. " : "Added “" + added + "”. ") +
+        "It is in the field now: save this word to create the link.";
+      dlg.close();
+    }).catch(function () { err.textContent = "Network error, please try again."; });
+  });
+})();
+</script>{% endblock %}

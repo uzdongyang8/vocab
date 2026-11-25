@@ -31,6 +31,8 @@ class Word(models.Model):
     stage = models.PositiveSmallIntegerField(default=0)
     next_review = models.DateField(default=timezone.localdate)
     fails = models.PositiveIntegerField(default=0)
+    opposites = models.ManyToManyField("self", blank=True)  # symmetric: if A is opposite of B, B is opposite of A
+    similar = models.ManyToManyField("self", blank=True)    # symmetric: words with a similar meaning
     archived = models.BooleanField(default=False)  # archived words are left out of quizzes and reminders
     created = models.DateTimeField(auto_now_add=True)
 

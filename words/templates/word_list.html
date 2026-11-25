@@ -7,6 +7,8 @@
 <p><a class="btn alt" href="{% url 'word_list' %}?show=archived">Archived ({{ archived }})</a></p>{% endif %}
 {% for w in words %}<div class="card"><b>{{ w.term }}</b>{% if w.pronunciation %} <span class="mut">[{{ w.pronunciation }}]</span>{% endif %} – {{ w.translation }}{% if w.archived %} <span class="mut">🗄 archived</span>{% endif %}
 {% if w.meaning %}<div class="mut">{{ w.meaning }}</div>{% endif %}{% if w.example %}<div><i>{{ w.example }}</i></div>{% endif %}
+{% if w.opposites.all %}<div>↔ Opposite: {% for o in w.opposites.all %}<a href="{% url 'word_list' %}?q={{ o.term|urlencode }}">{{ o.term }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+{% if w.similar.all %}<div>≈ Similar: {% for o in w.similar.all %}<a href="{% url 'word_list' %}?q={{ o.term|urlencode }}">{{ o.term }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
 <div class="mut">Added {{ w.created|date:"j M Y, H:i" }} · Next review: {{ w.next_review }} · Stage {{ w.stage }}/5 · Missed {{ w.fails }}×</div>
 <div class="row"><a class="btn alt" href="{% url 'edit_word' w.pk %}">Edit</a>
 <form method="post" action="{% if w.archived %}{% url 'unarchive_word' w.pk %}{% else %}{% url 'archive_word' w.pk %}{% endif %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn alt">{% if w.archived %}Unarchive{% else %}Archive{% endif %}</button></form>

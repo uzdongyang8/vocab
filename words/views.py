@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
-from django.http import HttpResponse, HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden, JsonResponse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -40,7 +40,7 @@ def dashboard(request):
 
 @login_required
 def add_word(request):
-    form = WordForm(request.POST or None)
+    form = WordForm(request.POST or None, user=request.user)
     if form.is_valid():
         word = form.save(commit=False)
         word.user = request.user
@@ -48,6 +48,7 @@ def add_word(request):
             form.add_error("term", "You already have this word.")
         else:
             word.save()
+            form.save_links(word)
             messages.success(request, f"Added “{word.term}”.")
             return redirect("add_word")
     return render(request, "add_word.html", {"form": form})
@@ -56,12 +57,13 @@ def add_word(request):
 @login_required
 def edit_word(request, pk):
     word = get_object_or_404(Word, pk=pk, user=request.user)
-    form = WordForm(request.POST or None, instance=word)
+    form = WordForm(request.POST or None, instance=word, user=request.user)
     if form.is_valid():
         if Word.objects.filter(user=request.user, term__iexact=form.cleaned_data["term"]).exclude(pk=pk).exists():
             form.add_error("term", "You already have this word.")
         else:
             form.save()  # learning progress (stage, next review) is kept
+            form.save_links(word)
             messages.success(request, f"Saved “{word.term}”.")
             return redirect("word_list")
     return render(request, "add_word.html", {"form": form, "editing": True})
@@ -75,10 +77,26 @@ def _back(request):
 
 
 @login_required
+@require_POST
+def quick_add(request):
+    """Pop-up on the add/edit form: create a word with just a name and translation."""
+    term, translation = request.POST.get("term", "").strip(), request.POST.get("translation", "").strip()
+    if not term or not translation:
+        return JsonResponse({"ok": False, "error": "Enter the word and its translation."}, status=400)
+    if len(term) > 200 or len(translation) > 200:
+        return JsonResponse({"ok": False, "error": "Too long (200 characters max)."}, status=400)
+    existing = services.find_word(request.user, term)
+    if existing:  # already there: just use it
+        return JsonResponse({"ok": True, "term": existing.term, "existed": True})
+    word = Word.objects.create(user=request.user, term=term, translation=translation)
+    return JsonResponse({"ok": True, "term": word.term, "existed": False})
+
+
+@login_required
 def word_list(request):
     q = request.GET.get("q", "").strip()
     show = "archived" if request.GET.get("show") == "archived" else "active"
-    mine = Word.objects.filter(user=request.user)
+    mine = Word.objects.filter(user=request.user).prefetch_related("opposites", "similar")
     active = mine.filter(archived=False)
     if q:  # search looks through active and archived words
         words = services.search_words(request.user, q)
@@ -133,7 +151,14 @@ def quiz(request):
         st["q"] = services.make_question(word, request.user)
     q = st["q"]
     if request.method == "POST":
-        ok = services.is_correct(word, q["kind"], request.POST.get("answer", ""))
+        given = request.POST.get("answer", "")
+        result = services.check_answer(word, q["kind"], given)
+        if result == "synonym" and not q.get("retried"):
+            q["retried"] = True
+            st["q"], st["fb"] = q, {"hint": f"“{given.strip()}” is a similar word, but not the one I'm looking for. Try again!"}
+            request.session["quiz"] = st
+            return redirect("quiz")
+        ok = result == "correct"
         word.review(ok)
         st.update(score=st["score"] + ok, i=st["i"] + 1, q=None,
                   fb={"ok": ok, "answer": services.answer_of(word, q["kind"]),

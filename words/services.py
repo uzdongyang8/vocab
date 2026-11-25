@@ -45,12 +45,30 @@ def is_correct(word, kind, given):
     return given.strip().casefold() == answer_of(word, kind).strip().casefold()
 
 
+def check_answer(word, kind, given):
+    """'correct', 'synonym' (typed a word linked as similar to the answer) or 'wrong'."""
+    if is_correct(word, kind, given):
+        return "correct"
+    g = given.strip().casefold()
+    if kind != "choice" and g and any(s.term.casefold() == g for s in word.similar.all()):
+        return "synonym"
+    return "wrong"
+
+
 def search_words(user, query):
     """Searches ALL words (active and archived). Case-insensitive search in word, pronunciation, translation,
     meaning and example. Done in Python because SQLite's own case-insensitive match only works for ASCII."""
-    words = list(Word.objects.filter(user=user))
+    words = list(Word.objects.filter(user=user).prefetch_related("opposites", "similar"))
     q = query.strip().casefold()
     if not q:
         return words
     return [w for w in words
             if q in " ".join((w.term, w.pronunciation, w.translation, w.meaning, w.example)).casefold()]
+
+
+def find_word(user, term):
+    """Find one of the user's words by its text (case-insensitive, any alphabet)."""
+    t = term.strip().casefold()
+    if not t:
+        return None
+    return next((w for w in Word.objects.filter(user=user) if w.term.casefold() == t), None)
